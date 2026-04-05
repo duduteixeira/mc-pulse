@@ -8,8 +8,13 @@ import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { AppModule } from './app.module';
 import { SCANNER_QUEUE } from './modules/scanner/scanner.constants';
+import { assertEnvOrExit } from './common/utils/validate-env';
 
 async function bootstrap(): Promise<void> {
+  // Valida env vars obrigatórias antes de qualquer inicialização —
+  // falha rápido com mensagem clara em vez de quebrar em runtime.
+  assertEnvOrExit();
+
   const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
     bodyParser: true,

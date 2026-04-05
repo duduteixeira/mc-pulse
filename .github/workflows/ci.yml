@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main, claude/**]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PUPPETEER_SKIP_DOWNLOAD: 'true'
+
+jobs:
+  api:
+    name: API — typecheck + test + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema apps/api/prisma/schema.prisma
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: apps/api
+
+      - name: Run tests
+        run: npx jest
+        working-directory: apps/api
+
+      - name: Build
+        run: npm run build --workspace=apps/api
+
+  web:
+    name: Web — typecheck + build
+    runs-on: ubuntu-latest
+    env:
+      # Chaves fictícias só pro build estático — Next valida formato
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZmFrZS1mYWtlLmNsZXJrLmFjY291bnRzLmRldiQ
+      CLERK_SECRET_KEY: sk_test_fake
+      NEXT_PUBLIC_DEMO_MODE: 'true'
+      NEXT_PUBLIC_API_URL: http://unused-in-ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: apps/web
+
+      - name: Build
+        run: npm run build --workspace=apps/web
