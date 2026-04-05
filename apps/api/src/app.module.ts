@@ -12,6 +12,9 @@ import { RulesEngineModule } from './modules/rules-engine/rules-engine.module';
 import { HealthScoreModule } from './modules/health-score/health-score.module';
 import { FindingsModule } from './modules/findings/findings.module';
 import { AiReportModule } from './modules/ai-report/ai-report.module';
+import { HistoryModule } from './modules/history/history.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { HealthController } from './health.controller';
 import { redisConnectionFromEnv } from './common/utils/redis.util';
 
@@ -32,6 +35,9 @@ import { redisConnectionFromEnv } from './common/utils/redis.util';
     HealthScoreModule,
     FindingsModule,
     AiReportModule,
+    HistoryModule,
+    ReportsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })

@@ -13,6 +13,7 @@ import {
 } from './scanner.constants';
 import { HealthScoreService } from '../health-score/health-score.service';
 import { AI_REPORT_QUEUE, AiReportJobData } from '../ai-report/ai-report.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface ProgressEvent {
   scanRunId: string;
@@ -33,6 +34,7 @@ export class ScannerService {
     @InjectQueue(AI_REPORT_QUEUE) private readonly aiReportQueue: Queue<AiReportJobData>,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly healthScore: HealthScoreService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async startScan(tenantId: string, connectionId: string): Promise<{ scanRunId: string }> {
@@ -152,6 +154,18 @@ export class ScannerService {
           removeOnFail: 50,
         },
       );
+
+      // Notificações (scan concluído + alerta de deterioração)
+      await this.notifications
+        .notifyScanCompleted({
+          scanRunId,
+          tenantId: scan.tenantId,
+          scoreOverall: result.scoreOverall,
+          classification: result.classification,
+        })
+        .catch((err) =>
+          this.logger.warn(`Falha em notifyScanCompleted: ${(err as Error).message}`),
+        );
     }
 
     await this.publishProgress({
