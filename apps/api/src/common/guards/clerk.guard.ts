@@ -20,11 +20,19 @@ export class ClerkGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    // Aceita Authorization header OU ?access_token= (necessário para SSE/EventSource)
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
+    const queryToken =
+      typeof req.query?.access_token === 'string' ? req.query.access_token : undefined;
+
+    let token: string;
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.slice('Bearer '.length);
+    } else if (queryToken) {
+      token = queryToken;
+    } else {
       throw new UnauthorizedException('Bearer token ausente');
     }
-    const token = authHeader.slice('Bearer '.length);
 
     const secretKey = process.env.CLERK_SECRET_KEY;
     if (!secretKey) {
