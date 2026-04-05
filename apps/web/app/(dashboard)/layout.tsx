@@ -15,9 +15,15 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }): JSX.Element {
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
   return (
     <div className="min-h-screen flex bg-gray-50">
-      <aside className="w-64 border-r border-gray-200 bg-white flex flex-col">
+      {isDemo && (
+        <div className="fixed top-0 inset-x-0 z-50 bg-amber-500 text-white text-center text-xs py-1.5 font-medium">
+          Modo demo · dados fictícios · mudanças não persistem entre reloads
+        </div>
+      )}
+      <aside className={`w-64 border-r border-gray-200 bg-white flex flex-col ${isDemo ? 'pt-6' : ''}`}>
         <div className="p-6 border-b border-gray-200">
           <Link href="/overview" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">

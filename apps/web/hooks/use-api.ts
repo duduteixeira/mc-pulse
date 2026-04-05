@@ -3,15 +3,19 @@
 import { useAuth } from '@clerk/nextjs';
 import { useMemo } from 'react';
 import { createApiClient } from '@/lib/api';
+import { createMockApiClient, isDemoMode } from '@/lib/mock-client';
 import type { AxiosInstance } from 'axios';
 
 /**
  * Retorna um axios autenticado que busca o token do Clerk a cada request.
- * O token é obtido via interceptor para sempre estar fresco.
+ * Em NEXT_PUBLIC_DEMO_MODE=true retorna um cliente mockado in-memory.
  */
 export function useApi(): AxiosInstance {
   const { getToken } = useAuth();
   return useMemo(() => {
+    if (isDemoMode()) {
+      return createMockApiClient();
+    }
     const client = createApiClient(null);
     client.interceptors.request.use(async (config) => {
       const token = await getToken();

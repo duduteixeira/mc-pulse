@@ -3,15 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import type { ProgressEvent } from '@/lib/types';
+import { isDemoMode } from '@/lib/mock-client';
+import { ALL_DOMAINS } from '@/lib/mock-data';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 /**
  * Abre uma conexão SSE ao endpoint /scans/:id/progress.
- * EventSource não suporta headers custom — por isso o token é passado via
- * query param e o backend aceita tanto Authorization header quanto access_token.
- *
- * Alternativa: biblioteca `@microsoft/fetch-event-source` com fetch + headers.
+ * Em DEMO_MODE, emite eventos simulados ao longo de ~12s.
  */
 export function useScanProgress(scanId: string | null): {
   events: ProgressEvent[];
@@ -23,6 +22,49 @@ export function useScanProgress(scanId: string | null): {
 
   useEffect(() => {
     if (!scanId) return;
+
+    // Demo: simula SSE com timers
+    if (isDemoMode()) {
+      setConnected(true);
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      ALL_DOMAINS.forEach((domain, i) => {
+        timers.push(
+          setTimeout(() => {
+            setEvents((prev) => [...prev, { scanRunId: scanId, domain, status: 'running' }]);
+          }, 500 + i * 400),
+        );
+        timers.push(
+          setTimeout(
+            () => {
+              setEvents((prev) => [
+                ...prev,
+                {
+                  scanRunId: scanId,
+                  domain,
+                  status: 'completed',
+                  itemsCollected: Math.floor(Math.random() * 100) + 10,
+                },
+              ]);
+            },
+            2500 + i * 1200,
+          ),
+        );
+      });
+      timers.push(
+        setTimeout(() => {
+          setEvents((prev) => [
+            ...prev,
+            { scanRunId: scanId, status: 'finalized', overallScore: 72.4 },
+          ]);
+          setConnected(false);
+        }, 11_500),
+      );
+      return () => {
+        timers.forEach(clearTimeout);
+      };
+    }
+
+    // Real: EventSource com token via query param
     let source: EventSource | null = null;
     let cancelled = false;
 
