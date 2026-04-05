@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Card, Badge, Title, Text } from '@tremor/react';
 import { Plus, Play, Trash2, TestTube2 } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
-import type { Connection } from '@/lib/types';
+import type { Connection, ScanDomain } from '@/lib/types';
+import { ScanDomainPicker } from '@/components/scan-domain-picker';
 
 const STATUS_COLOR: Record<string, 'emerald' | 'yellow' | 'red' | 'gray'> = {
   ACTIVE: 'emerald',
@@ -19,6 +21,7 @@ export default function ConnectionsPage(): JSX.Element {
   const api = useApi();
   const router = useRouter();
   const qc = useQueryClient();
+  const [pickerFor, setPickerFor] = useState<Connection | null>(null);
 
   const connectionsQuery = useQuery({
     queryKey: ['connections'],
@@ -37,9 +40,23 @@ export default function ConnectionsPage(): JSX.Element {
   });
 
   const scanMutation = useMutation({
-    mutationFn: async (connectionId: string) =>
-      (await api.post<{ scanRunId: string }>('/scans', { connectionId })).data,
-    onSuccess: (data) => router.push(`/scans/${data.scanRunId}`),
+    mutationFn: async ({
+      connectionId,
+      domains,
+    }: {
+      connectionId: string;
+      domains: ScanDomain[];
+    }) =>
+      (
+        await api.post<{ scanRunId: string }>('/scans', {
+          connectionId,
+          domains,
+        })
+      ).data,
+    onSuccess: (data) => {
+      setPickerFor(null);
+      router.push(`/scans/${data.scanRunId}`);
+    },
   });
 
   return (
@@ -79,7 +96,9 @@ export default function ConnectionsPage(): JSX.Element {
             <div className="flex items-start justify-between">
               <div>
                 <Title>{c.name}</Title>
-                <Text className="mt-1 font-mono text-xs">{c.subdomain}.marketingcloudapis.com</Text>
+                <Text className="mt-1 font-mono text-xs">
+                  {c.subdomain}.marketingcloudapis.com
+                </Text>
               </div>
               <Badge color={STATUS_COLOR[c.status] ?? 'gray'}>{c.status}</Badge>
             </div>
@@ -93,12 +112,12 @@ export default function ConnectionsPage(): JSX.Element {
             </div>
             <div className="mt-4 flex items-center gap-2">
               <button
-                onClick={() => scanMutation.mutate(c.id)}
-                disabled={c.status !== 'ACTIVE' || scanMutation.isPending}
+                onClick={() => setPickerFor(c)}
+                disabled={c.status !== 'ACTIVE'}
                 className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:bg-gray-300"
               >
                 <Play className="h-3.5 w-3.5" />
-                Iniciar scan
+                Novo scan
               </button>
               <button
                 onClick={() => testMutation.mutate(c.id)}
@@ -120,6 +139,18 @@ export default function ConnectionsPage(): JSX.Element {
           </Card>
         ))}
       </div>
+
+      <ScanDomainPicker
+        open={!!pickerFor}
+        connectionName={pickerFor?.name ?? ''}
+        loading={scanMutation.isPending}
+        onClose={() => setPickerFor(null)}
+        onConfirm={(domains) => {
+          if (pickerFor) {
+            scanMutation.mutate({ connectionId: pickerFor.id, domains });
+          }
+        }}
+      />
     </div>
   );
 }

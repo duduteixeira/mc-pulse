@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { Card, Title, Text, Badge, ProgressBar } from '@tremor/react';
 import { CheckCircle2, XCircle, Loader2, Circle } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
@@ -58,19 +59,29 @@ export default function ScanDetailPage({ params }: { params: { id: string } }): 
             Iniciado em {new Date(scan.createdAt).toLocaleString('pt-BR')}
           </Text>
         </div>
-        <Badge
-          color={
-            scan.status === 'COMPLETED'
-              ? 'emerald'
-              : scan.status === 'FAILED'
-                ? 'red'
-                : scan.status === 'PARTIAL'
-                  ? 'yellow'
-                  : 'blue'
-          }
-        >
-          {scan.status}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Badge
+            color={
+              scan.status === 'COMPLETED'
+                ? 'emerald'
+                : scan.status === 'FAILED'
+                  ? 'red'
+                  : scan.status === 'PARTIAL'
+                    ? 'yellow'
+                    : 'blue'
+            }
+          >
+            {scan.status}
+          </Badge>
+          {scan.status === 'COMPLETED' && (
+            <Link
+              href={`/scans/${scan.id}/report`}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+            >
+              Ver relatório IA
+            </Link>
+          )}
+        </div>
       </div>
 
       {(scan.status === 'RUNNING' || scan.status === 'PENDING') && (

@@ -11,6 +11,7 @@ import {
   SCAN_PROGRESS_CHANNEL,
   ScanJobData,
 } from './scanner.constants';
+import { validateDomains } from './domain-metadata';
 import { HealthScoreService } from '../health-score/health-score.service';
 import { AI_REPORT_QUEUE, AiReportJobData } from '../ai-report/ai-report.constants';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -37,12 +38,29 @@ export class ScannerService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async startScan(tenantId: string, connectionId: string): Promise<{ scanRunId: string }> {
+  /**
+   * Inicia um scan para uma conexão, rodando apenas os domínios solicitados.
+   *
+   * IMPORTANTE: Scan é sempre seletivo. Não temos "scan tudo" implícito —
+   * o usuário escolhe conscientemente o que analisar, porque cada domínio
+   * consome chamadas às APIs do SFMC do cliente.
+   *
+   * @param domains lista de domínios a escanear. Se omitida, usa ACTIVE_DOMAINS
+   *                (mantido apenas para compatibilidade com testes/scripts).
+   */
+  async startScan(
+    tenantId: string,
+    connectionId: string,
+    domains?: ScanDomain[],
+  ): Promise<{ scanRunId: string; domains: ScanDomain[] }> {
     const connection = await this.prisma.sfmcConnection.findUnique({
       where: { id: connectionId },
     });
     if (!connection) throw new NotFoundException('Conexão não encontrada');
     if (connection.tenantId !== tenantId) throw new ForbiddenException('Acesso negado');
+
+    const selected = domains && domains.length > 0 ? domains : ACTIVE_DOMAINS;
+    validateDomains(selected);
 
     const scanRun = await this.prisma.scanRun.create({
       data: {
@@ -50,7 +68,7 @@ export class ScannerService {
         connectionId,
         status: ScanStatus.PENDING,
         domainScans: {
-          create: ACTIVE_DOMAINS.map((domain) => ({
+          create: selected.map((domain) => ({
             domain,
             status: DomainStatus.PENDING,
           })),
@@ -58,9 +76,9 @@ export class ScannerService {
       },
     });
 
-    // Enfileira um job por domínio
+    // Enfileira um job por domínio selecionado
     await Promise.all(
-      ACTIVE_DOMAINS.map((domain) =>
+      selected.map((domain) =>
         this.queue.add(
           `scan-${domain.toLowerCase()}`,
           { scanRunId: scanRun.id, tenantId, connectionId, domain },
@@ -79,7 +97,7 @@ export class ScannerService {
       data: { status: ScanStatus.RUNNING, startedAt: new Date() },
     });
 
-    return { scanRunId: scanRun.id };
+    return { scanRunId: scanRun.id, domains: selected };
   }
 
   async list(tenantId: string): Promise<unknown[]> {

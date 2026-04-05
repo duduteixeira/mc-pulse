@@ -92,6 +92,18 @@ export interface ProgressEvent {
   overallScore?: number;
 }
 
+export interface DomainMetadata {
+  domain: ScanDomain;
+  label: string;
+  description: string;
+  estimatedApiCalls: number;
+  estimatedDurationSeconds: number;
+  minimumPlan: 'FREE' | 'PRO' | 'AGENCY' | 'ENTERPRISE';
+  ruleCount: number;
+  scoreWeight: number;
+  protocol: 'SOAP' | 'REST' | 'MIXED';
+}
+
 export interface AiReport {
   id: string;
   status: 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED';

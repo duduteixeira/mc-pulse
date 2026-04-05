@@ -1,6 +1,6 @@
 import { UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
-import { Activity, Link2, AlertTriangle, LayoutDashboard } from 'lucide-react';
+import { Activity, Link2, AlertTriangle, LayoutDashboard, History, GitCompare } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +8,8 @@ const navItems = [
   { href: '/overview', label: 'Overview', icon: LayoutDashboard },
   { href: '/connections', label: 'Conexões', icon: Link2 },
   { href: '/findings', label: 'Findings', icon: AlertTriangle },
+  { href: '/history', label: 'Histórico', icon: History },
+  { href: '/compare', label: 'Comparar', icon: GitCompare },
 ];
 
 export default function DashboardLayout({
