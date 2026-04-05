@@ -8,6 +8,14 @@ export const metadata: Metadata = {
   description: 'Health check SaaS para Salesforce Marketing Cloud',
 };
 
+/**
+ * Força renderização dinâmica em todas as rotas.
+ * Necessário porque o ClerkProvider precisa ler env vars em runtime,
+ * e o Next tenta pré-renderizar páginas como /_not-found estaticamente
+ * por default (o que causa erro de publishableKey missing no build).
+ */
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({
   children,
 }: {
@@ -28,3 +36,4 @@ export default function RootLayout({
     </ClerkProvider>
   );
 }
+
