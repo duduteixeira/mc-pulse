@@ -5,11 +5,13 @@ import { ScannerService } from './scanner.service';
 import { ScanProcessor } from './jobs/scan.processor';
 import { SCANNER_QUEUE } from './scanner.constants';
 import { CollectorsModule } from '../collectors/collectors.module';
+import { AiReportModule } from '../ai-report/ai-report.module';
 
 @Module({
   imports: [
     BullModule.registerQueue({ name: SCANNER_QUEUE }),
     CollectorsModule,
+    AiReportModule,
   ],
   controllers: [ScannerController],
   providers: [ScannerService, ScanProcessor],

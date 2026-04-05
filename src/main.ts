@@ -1,7 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { AppModule } from './app.module';
+import { SCANNER_QUEUE } from './modules/scanner/scanner.constants';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
@@ -33,6 +39,18 @@ async function bootstrap(): Promise<void> {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
+
+  // BullBoard apenas em desenvolvimento — nunca exposto em prod
+  if (process.env.NODE_ENV !== 'production') {
+    const scannerQueue = app.get<Queue>(getQueueToken(SCANNER_QUEUE));
+    const serverAdapter = new ExpressAdapter();
+    serverAdapter.setBasePath('/admin/queues');
+    createBullBoard({
+      queues: [new BullMQAdapter(scannerQueue)],
+      serverAdapter,
+    });
+    app.use('/admin/queues', serverAdapter.getRouter());
+  }
 
   const port = Number(process.env.PORT ?? 3001);
   await app.listen(port);

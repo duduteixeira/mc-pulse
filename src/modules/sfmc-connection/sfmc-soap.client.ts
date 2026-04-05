@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { parseStringPromise } from 'xml2js';
 import { SfmcAuthService } from './sfmc-auth.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { SfmcRateLimiter } from '../../common/utils/sfmc-rate-limiter';
 
 export interface SoapRetrieveOptions {
   objectType: string;
@@ -18,40 +20,52 @@ export interface SoapFilter {
 /**
  * Cliente SOAP read-only do SFMC.
  * Apenas operação Retrieve é implementada — nunca Create/Update/Delete.
+ * Todas as chamadas passam pelo rate limiter por tenant.
  */
 @Injectable()
 export class SfmcSoapClient {
   private readonly logger = new Logger(SfmcSoapClient.name);
 
-  constructor(private readonly auth: SfmcAuthService) {}
+  constructor(
+    private readonly auth: SfmcAuthService,
+    private readonly prisma: PrismaService,
+    private readonly limiter: SfmcRateLimiter,
+  ) {}
 
   async retrieve<T>(connectionId: string, opts: SoapRetrieveOptions): Promise<T[]> {
-    const token = await this.auth.getToken(connectionId);
-    const endpoint = `${token.soapBaseUrl.replace(/\/$/, '')}/Service.asmx`;
+    const conn = await this.prisma.sfmcConnection.findUnique({
+      where: { id: connectionId },
+      select: { tenantId: true },
+    });
+    if (!conn) throw new Error(`Connection ${connectionId} não encontrada`);
 
-    const envelope = this.buildRetrieveEnvelope(token.accessToken, opts);
+    return this.limiter.run(conn.tenantId, 'soap', async () => {
+      const token = await this.auth.getToken(connectionId);
+      const endpoint = `${token.soapBaseUrl.replace(/\/$/, '')}/Service.asmx`;
+      const envelope = this.buildRetrieveEnvelope(token.accessToken, opts);
 
-    try {
-      const { data } = await axios.post<string>(endpoint, envelope, {
-        headers: {
-          'Content-Type': 'text/xml; charset=utf-8',
-          SOAPAction: 'Retrieve',
-        },
-        timeout: 60_000,
-      });
+      try {
+        const { data } = await axios.post<string>(endpoint, envelope, {
+          headers: {
+            'Content-Type': 'text/xml; charset=utf-8',
+            SOAPAction: 'Retrieve',
+          },
+          timeout: 60_000,
+        });
 
-      const parsed = await parseStringPromise(data, { explicitArray: false, ignoreAttrs: true });
-      const body = parsed['soap:Envelope']?.['soap:Body']?.RetrieveResponseMsg;
-      if (!body) return [];
-      const results = body.Results;
-      if (!results) return [];
-      return Array.isArray(results) ? (results as T[]) : [results as T];
-    } catch (err) {
-      if (axios.isAxiosError(err)) {
-        this.logger.warn(`SOAP Retrieve ${opts.objectType} falhou: ${err.response?.status}`);
+        const parsed = await parseStringPromise(data, { explicitArray: false, ignoreAttrs: true });
+        const body = parsed['soap:Envelope']?.['soap:Body']?.RetrieveResponseMsg;
+        if (!body) return [];
+        const results = body.Results;
+        if (!results) return [];
+        return Array.isArray(results) ? (results as T[]) : [results as T];
+      } catch (err) {
+        if (axios.isAxiosError(err)) {
+          this.logger.warn(`SOAP Retrieve ${opts.objectType} falhou: ${err.response?.status}`);
+        }
+        throw err;
       }
-      throw err;
-    }
+    });
   }
 
   private buildRetrieveEnvelope(accessToken: string, opts: SoapRetrieveOptions): string {

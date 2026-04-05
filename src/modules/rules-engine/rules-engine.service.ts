@@ -6,14 +6,16 @@ import { GOVERNANCE_RULES } from './rules/governance.rules';
 import { DATA_RULES } from './rules/data.rules';
 import { JOURNEY_RULES } from './rules/journey.rules';
 import { AUTOMATION_RULES } from './rules/automation.rules';
+import { EMAIL_RULES } from './rules/email.rules';
+import { SECURITY_RULES } from './rules/security.rules';
 
 const RULES_BY_DOMAIN: Record<ScanDomain, Rule<unknown>[]> = {
   GOVERNANCE: GOVERNANCE_RULES as Rule<unknown>[],
   DATA: DATA_RULES as Rule<unknown>[],
   JOURNEY: JOURNEY_RULES as Rule<unknown>[],
   AUTOMATION: AUTOMATION_RULES as Rule<unknown>[],
-  EMAIL: [],
-  SECURITY: [],
+  EMAIL: EMAIL_RULES as Rule<unknown>[],
+  SECURITY: SECURITY_RULES as Rule<unknown>[],
 };
 
 @Injectable()

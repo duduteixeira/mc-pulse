@@ -3,14 +3,20 @@ import { ScanDomain } from '@prisma/client';
 export const SCANNER_QUEUE = 'scanner-queue';
 
 /**
- * Domínios que rodam na Fase 1 do MVP.
+ * Domínios ativos no scanner. Fase 1 implementou GOV/DATA/JRN/AUT;
+ * Fase 2 adiciona EMAIL e SECURITY.
  */
-export const PHASE_ONE_DOMAINS: ScanDomain[] = [
+export const ACTIVE_DOMAINS: ScanDomain[] = [
   ScanDomain.GOVERNANCE,
   ScanDomain.DATA,
   ScanDomain.JOURNEY,
   ScanDomain.AUTOMATION,
+  ScanDomain.EMAIL,
+  ScanDomain.SECURITY,
 ];
+
+/** @deprecated use ACTIVE_DOMAINS */
+export const PHASE_ONE_DOMAINS = ACTIVE_DOMAINS;
 
 export interface ScanJobData {
   scanRunId: string;

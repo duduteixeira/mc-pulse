@@ -6,12 +6,13 @@ import { DomainStatus, ScanDomain, ScanStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.provider';
 import {
-  PHASE_ONE_DOMAINS,
+  ACTIVE_DOMAINS,
   SCANNER_QUEUE,
   SCAN_PROGRESS_CHANNEL,
   ScanJobData,
 } from './scanner.constants';
 import { HealthScoreService } from '../health-score/health-score.service';
+import { AI_REPORT_QUEUE, AiReportJobData } from '../ai-report/ai-report.constants';
 
 export interface ProgressEvent {
   scanRunId: string;
@@ -29,6 +30,7 @@ export class ScannerService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(SCANNER_QUEUE) private readonly queue: Queue<ScanJobData>,
+    @InjectQueue(AI_REPORT_QUEUE) private readonly aiReportQueue: Queue<AiReportJobData>,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly healthScore: HealthScoreService,
   ) {}
@@ -46,7 +48,7 @@ export class ScannerService {
         connectionId,
         status: ScanStatus.PENDING,
         domainScans: {
-          create: PHASE_ONE_DOMAINS.map((domain) => ({
+          create: ACTIVE_DOMAINS.map((domain) => ({
             domain,
             status: DomainStatus.PENDING,
           })),
@@ -56,7 +58,7 @@ export class ScannerService {
 
     // Enfileira um job por domínio
     await Promise.all(
-      PHASE_ONE_DOMAINS.map((domain) =>
+      ACTIVE_DOMAINS.map((domain) =>
         this.queue.add(
           `scan-${domain.toLowerCase()}`,
           { scanRunId: scanRun.id, tenantId, connectionId, domain },
@@ -137,6 +139,20 @@ export class ScannerService {
         completedAt: new Date(),
       },
     });
+
+    // Enfileira geração de AI report se houver ao menos um domínio concluído
+    if (!allFailed) {
+      await this.aiReportQueue.add(
+        'ai-report',
+        { scanRunId, tenantId: scan.tenantId },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: 100,
+          removeOnFail: 50,
+        },
+      );
+    }
 
     await this.publishProgress({
       scanRunId,

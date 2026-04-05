@@ -10,6 +10,8 @@ import { GovernanceCollector } from '../../collectors/governance.collector';
 import { DataCollector } from '../../collectors/data.collector';
 import { JourneyCollector } from '../../collectors/journey.collector';
 import { AutomationCollector } from '../../collectors/automation.collector';
+import { EmailCollector } from '../../collectors/email.collector';
+import { SecurityCollector } from '../../collectors/security.collector';
 
 /**
  * Processor único que despacha por domínio.
@@ -27,6 +29,8 @@ export class ScanProcessor extends WorkerHost {
     private readonly dataCollector: DataCollector,
     private readonly journey: JourneyCollector,
     private readonly automation: AutomationCollector,
+    private readonly email: EmailCollector,
+    private readonly security: SecurityCollector,
   ) {
     super();
   }
@@ -103,8 +107,26 @@ export class ScanProcessor extends WorkerHost {
         await this.rules.persist(scanRunId, findings);
         return { itemsCollected: data.length };
       }
+      case ScanDomain.EMAIL: {
+        const data = await this.email.collect(connectionId, scanRunId);
+        const findings = this.rules.evaluate(ScanDomain.EMAIL, data);
+        await this.rules.persist(scanRunId, findings);
+        return {
+          itemsCollected:
+            data.sendClassifications.length +
+            data.sendDefinitions.length +
+            data.deliveryProfiles.length +
+            data.triggeredSends.length,
+        };
+      }
+      case ScanDomain.SECURITY: {
+        const data = await this.security.collect(connectionId, scanRunId);
+        const findings = this.rules.evaluate(ScanDomain.SECURITY, data);
+        await this.rules.persist(scanRunId, findings);
+        return { itemsCollected: data.packages.length };
+      }
       default:
-        throw new Error(`Domínio ${domain} não implementado na Fase 1`);
+        throw new Error(`Domínio ${domain} não implementado`);
     }
   }
 
