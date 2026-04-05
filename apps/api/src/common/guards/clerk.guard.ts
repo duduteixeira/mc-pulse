@@ -1,5 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { verifyToken } from '@clerk/clerk-sdk-node';
+import { verifyToken, createClerkClient } from '@clerk/clerk-sdk-node';
 import { Request } from 'express';
 import { UsersService } from '../../modules/auth/users.service';
 
@@ -46,9 +46,29 @@ export class ClerkGuard implements CanActivate {
         throw new UnauthorizedException('Token Clerk inválido: sub ausente');
       }
 
-      const user = await this.usersService.findByClerkId(clerkId);
+      let user = await this.usersService.findByClerkId(clerkId);
+
+      // Auto-sync: se o usuário ainda não existe localmente (p. ex. webhook
+      // ainda não configurado em dev), busca no Clerk e cria tenant + user.
       if (!user) {
-        throw new UnauthorizedException('Usuário não sincronizado');
+        try {
+          const clerkClient = createClerkClient({ secretKey });
+          const clerkUser = await clerkClient.users.getUser(clerkId);
+          const email =
+            clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+              ?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+          if (!email) {
+            throw new UnauthorizedException('Usuário Clerk sem email');
+          }
+          const name =
+            [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null;
+          user = await this.usersService.findOrCreate({ clerkId, email, name });
+        } catch (syncErr) {
+          if (syncErr instanceof UnauthorizedException) throw syncErr;
+          throw new UnauthorizedException(
+            `Falha ao sincronizar usuário: ${(syncErr as Error).message}`,
+          );
+        }
       }
 
       req.auth = { userId: user.id, tenantId: user.tenantId };
