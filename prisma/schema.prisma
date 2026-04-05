@@ -1,0 +1,472 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// PLATAFORMA
+// ─────────────────────────────────────────────
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  sfmcConnections SfmcConnection[]
+  scanRuns        ScanRun[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String
+  name      String?
+  role      UserRole @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([clerkId])
+  @@map("users")
+}
+
+enum Plan {
+  FREE
+  PRO
+  AGENCY
+  ENTERPRISE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// ─────────────────────────────────────────────
+// CONEXÃO SFMC
+// ─────────────────────────────────────────────
+
+model SfmcConnection {
+  id              String           @id @default(cuid())
+  name            String
+  subdomain       String
+  accountId       String
+  clientId        String
+  clientSecretEnc String
+  integrationType IntegrationType  @default(SINGLE_BU)
+  status          ConnectionStatus @default(PENDING)
+  lastTestedAt    DateTime?
+  errorMessage    String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  businessUnits BusinessUnit[]
+  packageScopes PackageScope[]
+  scanRuns      ScanRun[]
+
+  @@index([tenantId])
+  @@map("sfmc_connections")
+}
+
+enum IntegrationType {
+  SINGLE_BU
+  MULTI_BU
+  ACCOUNT_LEVEL
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACTIVE
+  FAILED
+  EXPIRED
+}
+
+model BusinessUnit {
+  id        String   @id @default(cuid())
+  sfmcId    String
+  name      String
+  parentId  String?
+  isParent  Boolean  @default(false)
+  userCount Int?
+  createdAt DateTime @default(now())
+
+  connectionId String
+  connection   SfmcConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@map("business_units")
+}
+
+model PackageScope {
+  id        String  @id @default(cuid())
+  packageId String
+  name      String
+  scope     String
+  category  String?
+
+  connectionId String
+  connection   SfmcConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@map("package_scopes")
+}
+
+// ─────────────────────────────────────────────
+// SCAN
+// ─────────────────────────────────────────────
+
+model ScanRun {
+  id           String      @id @default(cuid())
+  status       ScanStatus  @default(PENDING)
+  triggeredBy  TriggerType @default(MANUAL)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  errorMessage String?
+  createdAt    DateTime    @default(now())
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  connectionId String
+  connection   SfmcConnection @relation(fields: [connectionId], references: [id])
+
+  domainScans DomainScan[]
+  healthScore HealthScore?
+  findings    Finding[]
+  aiReport    AiReport?
+  reports     Report[]
+
+  dataExtensions DataExtension[]
+  journeys       Journey[]
+  automations    Automation[]
+  emailAssets    EmailAsset[]
+  sfmcUsers      SfmcUser[]
+
+  @@index([tenantId])
+  @@index([connectionId])
+  @@map("scan_runs")
+}
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+enum TriggerType {
+  MANUAL
+  SCHEDULED
+  API
+}
+
+model DomainScan {
+  id             String       @id @default(cuid())
+  domain         ScanDomain
+  status         DomainStatus @default(PENDING)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  errorMessage   String?
+  itemsCollected Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@unique([scanRunId, domain])
+  @@index([scanRunId])
+  @@map("domain_scans")
+}
+
+enum ScanDomain {
+  GOVERNANCE
+  DATA
+  JOURNEY
+  AUTOMATION
+  EMAIL
+  SECURITY
+}
+
+enum DomainStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+// ─────────────────────────────────────────────
+// OBJETOS COLETADOS
+// ─────────────────────────────────────────────
+
+model DataExtension {
+  id              String    @id @default(cuid())
+  sfmcId          String
+  name            String
+  customerKey     String?
+  categoryId      String?
+  rowCount        Int?
+  retentionPeriod Int?
+  retentionType   String?
+  hasPrimaryKey   Boolean   @default(false)
+  fieldCount      Int       @default(0)
+  isSendable      Boolean   @default(false)
+  createdDate     DateTime?
+  modifiedDate    DateTime?
+  collectedAt     DateTime  @default(now())
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([scanRunId])
+  @@map("data_extensions")
+}
+
+model Journey {
+  id              String    @id @default(cuid())
+  sfmcId          String
+  name            String
+  status          String
+  version         Int       @default(1)
+  definitionType  String?
+  channel         String?
+  entryCount      Int?
+  createdDate     DateTime?
+  modifiedDate    DateTime?
+  lastPublishedAt DateTime?
+  collectedAt     DateTime  @default(now())
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([scanRunId])
+  @@map("journeys")
+}
+
+model Automation {
+  id               String    @id @default(cuid())
+  sfmcId           String
+  name             String
+  description      String?
+  status           String
+  automationType   String?
+  lastRunTime      DateTime?
+  lastRunStatus    String?
+  nextRunTime      DateTime?
+  hasSchedule      Boolean   @default(false)
+  scheduleInterval String?
+  stepCount        Int       @default(0)
+  collectedAt      DateTime  @default(now())
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([scanRunId])
+  @@map("automations")
+}
+
+model EmailAsset {
+  id           String         @id @default(cuid())
+  sfmcId       String
+  assetType    EmailAssetType
+  name         String
+  description  String?
+  status       String?
+  isActive     Boolean        @default(true)
+  lastActivity DateTime?
+  collectedAt  DateTime       @default(now())
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([scanRunId])
+  @@map("email_assets")
+}
+
+enum EmailAssetType {
+  SEND_CLASSIFICATION
+  SEND_DEFINITION
+  DELIVERY_PROFILE
+  TRIGGERED_SEND
+}
+
+model SfmcUser {
+  id           String    @id @default(cuid())
+  sfmcId       String
+  name         String
+  email        String?
+  isActive     Boolean   @default(true)
+  isAdmin      Boolean   @default(false)
+  roleNames    String[]
+  businessUnit String?
+  createdDate  DateTime?
+  collectedAt  DateTime  @default(now())
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([scanRunId])
+  @@map("sfmc_users")
+}
+
+// ─────────────────────────────────────────────
+// FINDINGS
+// ─────────────────────────────────────────────
+
+model Finding {
+  id             String          @id @default(cuid())
+  ruleId         String
+  category       FindingCategory
+  severity       Severity
+  objectType     String
+  objectId       String?
+  objectName     String?
+  evidence       String
+  ruleViolated   String
+  impact         String
+  recommendation String
+  effort         Effort          @default(MEDIUM)
+  priority       Int
+  status         FindingStatus   @default(OPEN)
+  resolvedAt     DateTime?
+  createdAt      DateTime        @default(now())
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([scanRunId])
+  @@index([category])
+  @@index([severity])
+  @@index([status])
+  @@map("findings")
+}
+
+enum FindingCategory {
+  GOVERNANCE
+  DATA
+  JOURNEY
+  AUTOMATION
+  EMAIL
+  SECURITY
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum Effort {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum FindingStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  IGNORED
+}
+
+// ─────────────────────────────────────────────
+// HEALTH SCORE
+// ─────────────────────────────────────────────
+
+model HealthScore {
+  id              String   @id @default(cuid())
+  scoreOverall    Float
+  scoreGovernance Float?
+  scoreData       Float?
+  scoreJourney    Float?
+  scoreAutomation Float?
+  scoreEmail      Float?
+  scoreSecurity   Float?
+  classification  String
+  totalFindings   Int      @default(0)
+  criticalCount   Int      @default(0)
+  highCount       Int      @default(0)
+  mediumCount     Int      @default(0)
+  lowCount        Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  scanRunId String  @unique
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@map("health_scores")
+}
+
+// ─────────────────────────────────────────────
+// RELATÓRIO IA
+// ─────────────────────────────────────────────
+
+model AiReport {
+  id                   String         @id @default(cuid())
+  executiveSummary     String?
+  technicalAnalysis    String?
+  actionPlan30         String?
+  actionPlan60         String?
+  actionPlan90         String?
+  operationalChecklist String?
+  status               AiReportStatus @default(PENDING)
+  errorMessage         String?
+  generatedAt          DateTime?
+  createdAt            DateTime       @default(now())
+
+  scanRunId String  @unique
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@map("ai_reports")
+}
+
+enum AiReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// ─────────────────────────────────────────────
+// RELATÓRIOS PDF
+// ─────────────────────────────────────────────
+
+model Report {
+  id        String     @id @default(cuid())
+  type      ReportType
+  filePath  String?
+  fileSize  Int?
+  status    String     @default("pending")
+  createdAt DateTime   @default(now())
+
+  scanRunId String
+  scanRun   ScanRun @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([scanRunId])
+  @@map("reports")
+}
+
+enum ReportType {
+  EXECUTIVE_PDF
+  TECHNICAL_PDF
+  CHECKLIST_PDF
+}
